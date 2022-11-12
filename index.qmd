@@ -3,13 +3,13 @@ title: "Data Jamboree"
 subtitle: "Python"
 author: "Daniel Chen"
 format:
-  revealjs: 
+  revealjs:
     theme: simple
     footer: "[Daniel Chen](https://daniel.rbind.io/). @chendaniely. Using [Quarto](https://quarto.org/docs/presentations/revealjs/index.html). Slides: [https://github.com/chendaniely/asa-data_jamboree-2022](https://github.com/chendaniely/asa-data_jamboree-2022)"
     slide-number: c/t
     show-slide-number: all
     hash-type: number
-execute: 
+execute:
   echo: true
 jupyter: python3
 ---
@@ -22,11 +22,11 @@ jupyter: python3
 2. Create an `hour` variable with integer values from 0 to 23, and plot of the histogram of crashes by hour.
 3. Check if the number of persons killed is the summation of the number of pedestrians killed, cyclist killed, and motorists killed. From now on, use the number of persons killed as the sum of the pedestrians, cyclists, and motorists killed.
 4. Construct a cross table for the number of persons killed by the contributing factors of vehicle one. Collapse the contributing factors with a count of less than 100 to “other”. Is there any association between the contributing factors and the number of persons killed?
-5. Create a new variable death which is one if the number of persons killed is 1 or more; and zero otherwise. Construct a cross table for death versus borough. Test the null hypothesis that the two variables are not associated.
+5. Create a new variable death which is one if the number of persons killed is 1 or more; and zero otherwise. Construct a cross table for death versus borough. ~~Test the null hypothesis that the two variables are not associated~~.
 
 ## The Questions {.smaller}
 
-6. Visualize the crashes using their latitude and longitude (and time, possibly in an animation).
+6. ~~Visualize the crashes using their latitude and longitude (and time, possibly in an animation).~~
 7. Fit a logistic model with death as the outcome variable and covariates that are available in the data or can be engineered from the data. Example covariates are crash hour, borough, number of vehicles involved, etc. Interpret your results.
 8. Aggregate the data to the zip-code level and connect with the census data at the zip-code level.
 9. Visualize ~~and model~~ the count of crashes at the zip-code level.
@@ -38,7 +38,7 @@ jupyter: python3
 ```{python}
 import pandas as pd
 
-#jan22 = pd.read_csv("https://raw.githubusercontent.com/statds/ids-s22/main/notes/data/nyc_mv_collisions_202201.csv") 
+#jan22 = pd.read_csv("https://raw.githubusercontent.com/statds/ids-s22/main/notes/data/nyc_mv_collisions_202201.csv")
 #jan22.to_csv("data/nyc_mv_collisions_202201.csv", index=False)
 jan22 = pd.read_csv("data/nyc_mv_collisions_202201.csv")
 
@@ -86,9 +86,9 @@ jan22[["crash_time", "hour"]].head()
 
 
 ```{python}
-from plotnine import ggplot, aes, geom_histogram
+from plotnine import ggplot, aes, geom_histogram, geom_bar
 
-ggplot(jan22, aes(x="hour")) + geom_histogram()
+ggplot(jan22, aes(x="hour")) + geom_bar()
 ```
 
 ## It's a string!
@@ -101,7 +101,7 @@ jan22.info()
 ## Re-plot histogram
 
 ```{python}
-ggplot(jan22, aes(x="hour_int")) + geom_histogram()
+ggplot(jan22, aes(x="hour_int")) + geom_bar()
 ```
 
 
@@ -113,6 +113,7 @@ is the summation of the number of pedestrians killed, cyclist killed, and motori
 From now on, use the number of persons killed as the sum of the pedestrians, cyclists, and motorists killed
 
 ```{python}
+# check the columns we want to use
 jan22.columns
 ```
 
@@ -134,6 +135,7 @@ killed.head()
 
 
 ```{python}
+# note: you do want to be careful with axis=1
 killed_sum = killed.apply(sum, axis=1)
 killed_sum.value_counts(dropna=False)
 ```
@@ -156,6 +158,7 @@ cross_tab = pd.crosstab(
 )
 
 cross = cross_tab.reset_index()
+cross.columns.name = None
 ```
 
 ## {.smaller}
@@ -189,15 +192,17 @@ recode_factors("Accelerator Defective", 9)
 recode_factors("Traffic Control Disregarded", 206)
 ```
 
-##
+## Create new labels
 
 ```{python}
+# see the results
 recode_factors(cross["contributing_factor_vehicle_1"], cross["All"])
 ```
 
-##
+## Create new labels
 
 ```{python}
+# save the results
 cross["recode"] = recode_factors(cross["contributing_factor_vehicle_1"], cross["All"])
 cross
 ```
@@ -209,14 +214,15 @@ recoded_cross = cross["recode"].value_counts()
 recoded_cross
 ```
 
-## Recode original values
+## Create the renaming dictionary
 
 ```{python}
+# create the recoding dictionary
 recode_dict = dict(zip(cross["contributing_factor_vehicle_1"], cross["recode"]))
 recode_dict
 ```
 
-##
+## Replace/Recode the values
 
 ```{python}
 jan22["cont_factor_1_recode"] = jan22.contributing_factor_vehicle_1.replace(recode_dict)
@@ -236,6 +242,7 @@ cross_tab_recoded = pd.crosstab(
   margins=True
 )
 cross_tab_recoded = cross_tab_recoded.reset_index()
+cross_tab_recoded.columns.name = None
 ```
 
 ## {.smaller}
@@ -251,46 +258,31 @@ which is one if the number of persons killed is 1 or more; and zero otherwise.
 
 ```{python}
 def recode_num_killed(num_killed):
-    if num_killed > 1:
+    if num_killed >= 1:
       return 1
     else:
       return 0
 ```
 
 ```{python}
-# TODO: this is wrong
-cross_tab_recoded["death"] = cross_tab_recoded[1].apply(recode_num_killed)
+jan22["death"] = jan22["number_of_persons_killed"].apply(recode_num_killed)
 ```
 
 ## {.smaller}
 
 ```{python}
-cross_tab_recoded
+jan22["death"].value_counts(dropna=False)
 ```
 
 
 ## 5b: Construct a cross table for death versus borough.
 
 ```{python}
-death_recode = dict(zip(cross_tab_recoded["cont_factor_1_recode"], cross_tab_recoded["death"]))
-death_recode
-```
-
-##
-
-```{python}
-jan22["death"] = jan22["cont_factor_1_recode"].replace(death_recode)
-
-jan22[["cont_factor_1_recode", "death"]]
-```
-
-##
-
-```{python}
 pd.crosstab(jan22["borough"], jan22["death"])
 ```
 
 
+<!--
 ## 5c: Test the null hypothesis that the two variables are not associated
 
 ```{python}
@@ -299,6 +291,7 @@ import statsmodels.api as sm
 
 jan22_boro_death = jan22[["borough", "death"]].dropna()
 ```
+-->
 
 # Question 6
 
@@ -307,7 +300,7 @@ using their latitude and longitude (and time, possibly in an animation).
 
 
 ```{python}
-# TODO: i don't know how to plot in python
+# I don't know how to plot maps in python
 ```
 
 # Question 7
@@ -329,6 +322,63 @@ mod = smf.logit("death ~ hour_int + borough", data=jan22).fit()
 mod.summary()
 ```
 
+##
+
+```{python}
+mod.params
+```
+
+## Logistic regression scikit-learn
+
+```{python}
+from sklearn import linear_model
+lr = linear_model.LogisticRegression()
+
+predictors = pd.get_dummies(
+  jan22[["hour_int", "borough"]],
+  drop_first=True
+)
+
+results = lr.fit(X=predictors, y = jan22["death"])
+results.coef_
+```
+
+## Compare
+
+```{python}
+mod.params
+```
+
+```{python}
+results.coef_
+```
+
+## Scikit-Learn's Documentation
+
+```
+class sklearn.linear_model.LogisticRegression(penalty='l2', *, dual=False, tol=0.0001, C=1.0, fit_intercept=True, intercept_scaling=1, class_weight=None, random_state=None, solver='lbfgs', max_iter=100, multi_class='auto', verbose=0, warm_start=False, n_jobs=None, l1_ratio=None)
+```
+
+> Note that regularization is applied by default. It can handle both dense and sparse input. Use C-ordered arrays or CSR matrices containing 64-bit floats for optimal performance; any other input format will be converted (and copied).
+
+##
+
+```{python}
+lr2 = linear_model.LogisticRegression(penalty="none")
+results2 = lr2.fit(X=predictors, y = jan22["death"])
+results2.coef_
+```
+
+```{python}
+mod.params
+```
+
+##
+
+```{python}
+ggplot(jan22, aes(x="hour_int", y="death")) + geom_bar(stat="identity")
+```
+
 # Question 8
 
 ## 8a: Aggregate the data to the zip-code level
@@ -336,7 +386,7 @@ mod.summary()
 
 ```{python}
 jan22["zip_code_str"] = jan22["zip_code"].astype(str)
-jan22["zip_code_str"] 
+jan22["zip_code_str"]
 ```
 
 ##
@@ -351,8 +401,8 @@ jan22["zip_code_str"].str.split(".").str.get(1).value_counts()
 jan22["zip_code_str"].str.len().value_counts()
 ```
 
-
-## 
+<!--
+##
 
 
 ```{python}
@@ -360,6 +410,8 @@ income20 = pd.read_csv("data/acs_data/ACSST5Y2020.S1903_data_with_overlays_2022-
 ```
 
 ## 8b: Connect with the census data at the zip-code level.
+
+-->
 
 # Question 9
 
@@ -394,20 +446,39 @@ size_by_zip_df.describe()
 
 ```{python}
 from plotnine import geom_bar, coord_flip
-ggplot(size_by_zip_df, aes(x="zip_code_str", y="count")) + geom_bar(stat="identity") + coord_flip()
+(
+  ggplot(size_by_zip_df,
+    aes(x="zip_code_str", y="count"))
+  + geom_bar(stat="identity")
+  + coord_flip()
+)
 ```
 
 ##
 
+```{python}
+size_by_zip_df_sub = (
+  size_by_zip_df
+  .loc[size_by_zip_df["count"] > 50]
+  .sort_values("count", ascending=False)
+)
+```
 
 ```{python}
-size_by_zip_df_sub = size_by_zip_df.loc[size_by_zip_df["count"] > 38].sort_values("count", ascending=False)
+size_by_zip_df_sub["zip_code_str"] = (
+  size_by_zip_df_sub["zip_code_str"]
+  .astype(str)
+  .str.slice(start=0, stop=5)
+)
+```
 
-order_list = size_by_zip_df_sub.index.to_list()
+##
 
-zip_cat = pd.Categorical(size_by_zip_df_sub['zip_code_str'], categories=order_list)
-
-size_by_zip_df_sub = size_by_zip_df_sub.assign(zip_cat = zip_cat)
-
-(ggplot(size_by_zip_df_sub, aes(x="zip_cat", y="count")) + geom_bar(stat="identity") + coord_flip())
+```{python}
+(
+  ggplot(size_by_zip_df_sub,
+    aes(x="zip_code_str", y="count"))
+  + geom_bar(stat="identity")
+  + coord_flip()
+)
 ```
